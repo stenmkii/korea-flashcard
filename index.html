@@ -294,42 +294,44 @@
                 cardUi.classList.remove('hidden');
                 statusMessage.classList.add('hidden');
                 
-                updateCard();
+                // (★変更) updateCard() の代わりに、最初のカードを直接セットする
+                if (sessionQueue.length > 0) {
+                    currentCard = sessionQueue.shift();
+                    displayCard(currentCard); // 新しい関数
+                    sessionCounter.textContent = `残り: ${sessionQueue.length + 1}`;
+                } else {
+                    // もしCSVが空ならエラー表示（parseCSV側で処理されるが念のため）
+                    displayError("単語データが見つかりません。");
+                }
             }
 
-            function updateCard() {
-                if (sessionQueue.length === 0) {
-                    showResults();
-                    return;
-                }
-                
-                isTransitioning = false; 
+            // (★追加) カードを指定された内容で即時表示する関数 (アニメーションなし)
+            function displayCard(card) {
+                isTransitioning = false;
 
                 if (isFlipped) {
                     cardContainer.classList.remove('is-flipped');
                     isFlipped = false;
                 }
                 
-                currentCard = sessionQueue.shift();
-                
-                // (修正) 'hidden' の代わりに opacity と visibility を操作
+                // ボタンを隠す
                 answerButtons.classList.add('opacity-0', 'invisible');
                 answerButtons.classList.remove('opacity-100', 'visible');
                 
                 // カードの内容をセット
-                cardFrontText.textContent = currentCard.korean;
-                cardBackText.textContent = currentCard.japanese;
+                cardFrontText.textContent = card.korean;
+                cardBackText.textContent = card.japanese;
                 
-                if (showReading && hasReadingData && currentCard.reading) {
-                    cardFrontReading.textContent = currentCard.reading;
+                if (showReading && hasReadingData && card.reading) {
+                    cardFrontReading.textContent = card.reading;
                     cardFrontReading.classList.remove('hidden');
                 } else {
                     cardFrontReading.textContent = '';
                     cardFrontReading.classList.add('hidden');
                 }
-                
-                sessionCounter.textContent = `残り: ${sessionQueue.length + 1}`;
             }
+
+            // (★変更) 以前の updateCard は不要になったので削除
 
             function flipCard() {
                 if (isTransitioning) return;
@@ -348,44 +350,69 @@
                 }
             }
 
-            // (★今回の修正)
-            function handleCorrect() {
+            // (★追加) 次のカードをロードし、アニメーションさせる関数
+            function loadNextCard(wasIncorrect) {
                 if (isTransitioning) return;
                 isTransitioning = true;
                 
-                // (★追加) ボタンを（アニメーション付きで）即座に隠す
+                // ボタンを（アニメーション付きで）即座に隠す
                 answerButtons.classList.add('opacity-0', 'invisible');
                 answerButtons.classList.remove('opacity-100', 'visible');
+
+                if (wasIncorrect) {
+                    incorrectCount++;
+                    incorrectCards.add(currentCard);
+                    sessionQueue.push(currentCard); // 間違えたカードをキューの最後に戻す
+                }
                 
+                // 次のカードがあるか確認
+                if (sessionQueue.length === 0) {
+                    // セッション終了
+                    if (isFlipped) {
+                        cardContainer.classList.remove('is-flipped');
+                        isFlipped = false;
+                        setTimeout(showResults, 600); // アニメーション後に結果表示
+                    } else {
+                        showResults();
+                    }
+                    return;
+                }
+
+                // 次のカードを準備
+                const nextCard = sessionQueue.shift();
+
+                // 即座に表面（韓国語）だけを次のカードの内容に更新
+                cardFrontText.textContent = nextCard.korean;
+                if (showReading && hasReadingData && nextCard.reading) {
+                    cardFrontReading.textContent = nextCard.reading;
+                    cardFrontReading.classList.remove('hidden');
+                } else {
+                    cardFrontReading.textContent = '';
+                    cardFrontReading.classList.add('hidden');
+                }
+                
+                // カードを表面に戻すアニメーション
                 if (isFlipped) {
                     cardContainer.classList.remove('is-flipped');
                     isFlipped = false;
-                    setTimeout(updateCard, 600); // 600msはフリップアニメーションの時間
-                } else {
-                    updateCard();
                 }
+                
+                // アニメーション完了後に裏面（日本語）の更新と currentCard の確定
+                setTimeout(() => {
+                    currentCard = nextCard; // ここで currentCard を正式に更新
+                    cardBackText.textContent = currentCard.japanese; // 裏面を更新
+                    sessionCounter.textContent = `残り: ${sessionQueue.length + 1}`;
+                    isTransitioning = false;
+                }, 600); // 600msはフリップアニメーションの時間
             }
 
-            // (★今回の修正)
-            function handleIncorrect() {
-                if (isTransitioning) return;
-                isTransitioning = true;
+            // (★変更) handleCorrect / handleIncorrect が新しい関数を呼ぶように
+            function handleCorrect() {
+                loadNextCard(false);
+            }
 
-                // (★追加) ボタンを（アニメーション付きで）即座に隠す
-                answerButtons.classList.add('opacity-0', 'invisible');
-                answerButtons.classList.remove('opacity-100', 'visible');
-                
-                incorrectCount++;
-                incorrectCards.add(currentCard);
-                sessionQueue.push(currentCard);
-                
-                if (isFlipped) {
-                    cardContainer.classList.remove('is-flipped');
-                    isFlipped = false;
-                    setTimeout(updateCard, 600); // 600msはフリップアニメーションの時間
-                } else {
-                    updateCard();
-                }
+            function handleIncorrect() {
+                loadNextCard(true);
             }
 
             function showResults() {
