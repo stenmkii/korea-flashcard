@@ -71,7 +71,6 @@
             fill: white;
         }
 
-        /* (追加) 結果画面の苦手な単語リスト */
         #苦手な単語リスト li {
             background-color: #374151; /* bg-gray-700 */
             padding: 0.5rem 1rem;
@@ -93,7 +92,7 @@
         </div>
 
 
-        <!-- (変更) フラッシュカードUI -->
+        <!-- フラッシュカードUI -->
         <div id="card-ui" class="hidden">
             <!-- フラッシュカード本体 -->
             <div id="flashcard-container" class="card-container w-full h-64 mb-6 cursor-pointer">
@@ -123,8 +122,13 @@
                 <label for="toggle-reading" class="ml-2 text-sm select-none cursor-pointer">読み仮名を表示</label>
             </div>
 
-            <!-- (追加) わかった/わからなかった ボタン (最初は非表示) -->
-            <div id="answer-buttons" class="flex justify-between items-center mb-4 hidden">
+            <!-- 
+                (修正) わかった/わからなかった ボタン
+                'hidden' クラス (display: none) を削除し、
+                'opacity-0' (透明) と 'invisible' (非表示だがスペースは確保) をデフォルトにします。
+                'transition-opacity' でフェードイン/アウトするようにします。
+            -->
+            <div id="answer-buttons" class="flex justify-between items-center mb-4 opacity-0 invisible transition-opacity duration-300">
                 <button id="incorrect-button" class="bg-red-600 hover:bg-red-500 text-white font-bold py-3 px-6 rounded-lg transition-colors shadow-md w-1/2 mr-2">
                     わからなかった
                 </button>
@@ -133,11 +137,11 @@
                 </button>
             </div>
             
-            <!-- (追加) カードの残り枚数カウンター -->
+            <!-- カードの残り枚数カウンター (ここがずれる問題があった) -->
             <div id="session-counter" class="text-center text-lg text-gray-400 mb-4"></div>
         </div>
         
-        <!-- (追加) 結果表示画面 -->
+        <!-- 結果表示画面 -->
         <div id="results-screen" class="hidden text-center p-6 bg-gray-800 rounded-xl shadow-2xl">
             <h2 class="text-3xl font-bold text-indigo-400 mb-4">セッション完了！</h2>
             
@@ -192,17 +196,16 @@
             const restartButton = document.getElementById('restart-button');
 
             // --- 変数の初期化 ---
-            let masterFlashcards = []; // CSVから読み込んだ全カード (マスター)
-            let sessionQueue = [];     // 現在のセッションの学習キュー
-            let currentCard = null;    // 現在表示中のカード
-            
-            let incorrectCards = new Set(); // このセッションで間違えた単語を記録
-            let correctCount = 0;       // 正解回数 ( = マスターの単語数)
-            let incorrectCount = 0;     // 間違えた回数
-            
+            let masterFlashcards = []; 
+            let sessionQueue = [];     
+            let currentCard = null;    
+            let incorrectCards = new Set(); 
+            let correctCount = 0;       
+            let incorrectCount = 0;     
             let isFlipped = false;
             let showReading = true;
             let hasReadingData = false;
+            let isTransitioning = false; 
             
             const synth = window.speechSynthesis;
             if (!synth) {
@@ -273,25 +276,21 @@
                     } else {
                         readingToggleContainer.classList.add('hidden');
                     }
-                    startSession(); // (変更) CSVパース後にセッションを開始
+                    startSession();
                 } else {
                     displayError("CSVの形式が正しくないか、データが空です (jp,kr または jp,kr,read 形式)。");
                 }
             }
 
-            // --- (追加) セッション管理 ---
+            // --- セッション管理 ---
 
-            // 新しいセッションを開始する
             function startSession() {
-                // 統計情報をリセット
                 correctCount = masterFlashcards.length;
                 incorrectCount = 0;
                 incorrectCards.clear();
                 
-                // 学習キューを作成 (マスターリストをコピーしてシャッフル)
                 sessionQueue = shuffleArray([...masterFlashcards]);
                 
-                // UIを初期状態に戻す
                 resultsScreen.classList.add('hidden');
                 cardUi.classList.remove('hidden');
                 statusMessage.classList.add('hidden');
@@ -299,25 +298,24 @@
                 updateCard();
             }
 
-            // カードを更新する (キューから次のカードを表示)
             function updateCard() {
                 if (sessionQueue.length === 0) {
-                    // キューが空になったら結果表示
                     showResults();
                     return;
                 }
+                
+                isTransitioning = false; 
 
-                // キューの先頭からカードを取り出す
-                currentCard = sessionQueue.shift();
-
-                // カードを表面に戻す
                 if (isFlipped) {
                     cardContainer.classList.remove('is-flipped');
                     isFlipped = false;
                 }
                 
-                // 回答ボタンを隠す
-                answerButtons.classList.add('hidden');
+                currentCard = sessionQueue.shift();
+                
+                // (修正) 'hidden' の代わりに opacity と visibility を操作
+                answerButtons.classList.add('opacity-0', 'invisible');
+                answerButtons.classList.remove('opacity-100', 'visible');
                 
                 // カードの内容をセット
                 cardFrontText.textContent = currentCard.korean;
@@ -331,45 +329,57 @@
                     cardFrontReading.classList.add('hidden');
                 }
                 
-                // カウンターを更新 (残り枚数)
                 sessionCounter.textContent = `残り: ${sessionQueue.length + 1}`;
             }
 
-            // カードをフリップする
             function flipCard() {
+                if (isTransitioning) return;
+                
                 isFlipped = !isFlipped;
                 cardContainer.classList.toggle('is-flipped');
                 
-                // (追加) カードを裏返したら回答ボタンを表示
                 if (isFlipped) {
-                    answerButtons.classList.remove('hidden');
+                    // (修正) 'hidden' の代わりに opacity と visibility を操作
+                    answerButtons.classList.remove('opacity-0', 'invisible');
+                    answerButtons.classList.add('opacity-100', 'visible');
                 } else {
-                    answerButtons.classList.add('hidden');
+                    // (修正) 'hidden' の代わりに opacity と visibility を操作
+                    answerButtons.classList.add('opacity-0', 'invisible');
+                    answerButtons.classList.remove('opacity-100', 'visible');
                 }
             }
 
-            // (追加) 「わかった」ボタンの処理
             function handleCorrect() {
-                // 次のカードへ
-                updateCard();
+                if (isTransitioning) return;
+                isTransitioning = true;
+                
+                if (isFlipped) {
+                    cardContainer.classList.remove('is-flipped');
+                    isFlipped = false;
+                    setTimeout(updateCard, 600); 
+                } else {
+                    updateCard();
+                }
             }
 
-            // (追加) 「わからなかった」ボタンの処理
             function handleIncorrect() {
-                // 間違えた回数をカウント
+                if (isTransitioning) return;
+                isTransitioning = true;
+
                 incorrectCount++;
-                // 苦手な単語リストに記録 (Setなので重複は自動で除外)
                 incorrectCards.add(currentCard);
-                
-                // (重要) キューの最後尾にカードを戻す
                 sessionQueue.push(currentCard);
                 
-                // 次のカードへ
-                updateCard();
+                if (isFlipped) {
+                    cardContainer.classList.remove('is-flipped');
+                    isFlipped = false;
+                    setTimeout(updateCard, 600); 
+                } else {
+                    updateCard();
+                }
             }
 
-            // (追加) 結果を表示する
-            function showResults() {
+S            function showResults() {
                 cardUi.classList.add('hidden');
                 resultsScreen.classList.remove('hidden');
                 
@@ -380,8 +390,7 @@
                 correctCountEl.textContent = correctCount;
                 totalAnswersEl.textContent = totalAnswers;
                 
-                // 苦手な単語リストを作成
-                incorrectWordsList.innerHTML = ''; // リストをクリア
+                incorrectWordsList.innerHTML = '';
                 if (incorrectCards.size > 0) {
                     incorrectCards.forEach(card => {
                         const li = document.createElement('li');
@@ -395,21 +404,13 @@
             }
 
             // --- イベントリスナー ---
-
-            // 「わかった」ボタン
             correctButton.addEventListener('click', handleCorrect);
-            // 「わからなかった」ボタン
             incorrectButton.addEventListener('click', handleIncorrect);
-            // 「もう一度初めから」ボタン
             restartButton.addEventListener('click', startSession);
-
-            // カードクリックでフリップ
             cardContainer.addEventListener('click', flipCard);
             
-            // 読み方トグルスイッチ
             toggleReading.addEventListener('change', () => {
                 showReading = toggleReading.checked;
-                // 現在のカード表示を即時更新 (カードがフリップしていなくても読み方表示を更新するため)
                 if (currentCard) {
                     if (showReading && hasReadingData && currentCard.reading) {
                         cardFrontReading.textContent = currentCard.reading;
@@ -421,8 +422,7 @@
                 }
             });
             
-            // --- 読み上げ機能 (参照先を currentCard に変更) ---
-            
+            // --- 読み上げ機能 ---
             speakKoreanButton.addEventListener('click', (event) => {
                 event.stopPropagation(); 
                 if (currentCard) {
@@ -440,7 +440,7 @@
             function speakText(text, lang) {
                 if (!synth || !text) return;
                 synth.cancel(); 
-                const utterance = new SpeechSynthesisUtterance(text);
+                const utterance = new SpeechS synthesisUtterance(text);
                 utterance.lang = lang;
                 const voices = synth.getVoices();
                 let specificVoice = voices.find(voice => voice.lang === lang);
@@ -456,7 +456,6 @@
                 synth.onvoiceschanged = () => synth.getVoices();
             }
 
-            // ページ読み込み時にCSVデータを自動で読み込む
             loadCSVData();
         });
     </script>
