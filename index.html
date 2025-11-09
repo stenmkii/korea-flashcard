@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>韓国語フラッシュカード</title>
+    <!-- Tailwind CSS CDNを読み込み -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Interフォントの読み込み（Tailwindのデフォルト） */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            /* ダークモード用の背景色（好みで調整） */
+            background-color: #111827; /* bg-gray-900 */
+        }
+
+        /* 3Dフリップアニメーション用のスタイル */
+        .card-container {
+            perspective: 1000px;
+        }
+        .card-inner {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            transition: transform 0.6s;
+            transform-style: preserve-3d;
+        }
+        .card-container.is-flipped .card-inner {
+            transform: rotateY(180deg);
+        }
+        .card-face {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden; /* 背面を非表示 */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border-radius: 0.75rem; /* rounded-xl */
+            padding: 1.5rem; /* p-6 */
+        }
+        /* カードの表面（韓国語） */
+        .card-front {
+            background-color: #374151; /* bg-gray-700 */
+            color: white;
+        }
+        /* カードの裏面（日本語） */
+        .card-back {
+            background-color: #4B5563; /* bg-gray-600 */
+            color: white;
+            transform: rotateY(180deg); /* 裏面は最初から反転 */
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen bg-gray-900 text-white p-4">
+
+    <div class="w-full max-w-md mx-auto">
+        <h1 class="text-3xl font-bold text-center mb-6 text-indigo-400">韓国語フラッシュカード</h1>
+
+        <!-- CSVファイル入力 (削除) -->
+        
+        <!-- 読み込み/エラーメッセージ表示 -->
+        <div id="status-message" class="text-center text-lg text-gray-400 mb-6">
+            <code>words.csv</code> を読み込んでいます...
+        </div>
+
+
+        <!-- フラッシュカードUI (ファイル読み込み後に表示) -->
+        <div id="card-ui" class="hidden">
+            <!-- フラッシュカード本体 -->
+            <div id="flashcard-container" class="card-container w-full h-64 mb-6 cursor-pointer">
+                <div id="card-inner" class="card-inner">
+                    <!-- カードの表面 (韓国語) -->
+                    <div class="card-face card-front">
+                        <p id="card-front-text" class="text-4xl font-semibold"></p>
+                    </div>
+                    <!-- カードの裏面 (日本語) -->
+                    <div class="card-face card-back">
+                        <p id="card-back-text" class="text-3xl"></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ナビゲーションボタン -->
+            <div class="flex justify-between items-center mb-4">
+                <button id="prev-button" class="bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 px-6 rounded-lg transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed">
+                    前へ
+                </button>
+                <span id="card-counter" class="text-lg text-gray-400"></span>
+                <button id="next-button" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 px-6 rounded-lg transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed">
+                    次へ
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            
+            // DOM要素の取得
+            // const csvFileInput = document.getElementById('csvFileInput'); // 削除
+            const statusMessage = document.getElementById('status-message'); // 追加
+            const cardUi = document.getElementById('card-ui');
+            const cardContainer = document.getElementById('flashcard-container');
+            const cardFrontText = document.getElementById('card-front-text');
+            const cardBackText = document.getElementById('card-back-text');
+            const prevButton = document.getElementById('prev-button');
+            const nextButton = document.getElementById('next-button');
+            const cardCounter = document.getElementById('card-counter');
+
+            // フラッシュカードのデータを空配列で初期化
+            let flashcards = [];
+            let currentIndex = 0;
+            let isFlipped = false;
+
+            // ファイル入力イベントリスナー (削除)
+            // ...
+
+            // CSVデータをサーバーから非同期で読み込む関数 (追加)
+            async function loadCSVData() {
+                try {
+                    // 同じサーバー上の 'words.csv' をfetch
+                    const response = await fetch('words.csv');
+                    if (!response.ok) {
+                        // fetchが失敗した場合 (例: 404 Not Found)
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    const text = await response.text();
+                    parseCSV(text);
+                } catch (error) {
+                    // ネットワークエラーやfetchの失敗
+                    console.error('CSVの読み込みに失敗しました:', error);
+                    displayError(`<code>words.csv</code> の読み込みに失敗しました。サーバー上にファイルがあるか確認してください。`);
+                }
+            }
+
+            // エラーメッセージを表示する関数 (追加)
+            function displayError(message) {
+                statusMessage.innerHTML = message; // innerHTMLを使って <code> タグを許可
+                statusMessage.classList.remove('text-gray-400');
+                statusMessage.classList.add('text-red-500'); // エラーは赤色で表示
+                cardUi.classList.add('hidden'); // カードUIを隠す
+            }
+
+            // CSVテキストをパースしてカードデータを設定する関数
+            function parseCSV(csvText) {
+                flashcards = []; // 既存のデータをリセット
+                // 改行コード(CRLF/LF)に対応し、空行を除外
+                const lines = csvText.split(/\r?\n/).filter(line => line.trim() !== '');
+
+                // 1行目がヘッダー 'jp,kr' かどうかを簡易的にチェック
+                const headerIndex = (lines[0] && lines[0].trim().toLowerCase() === 'jp,kr') ? 1 : 0;
+                
+                // ヘッダー行を考慮してスライス
+                const dataLines = lines.slice(headerIndex);
+
+                dataLines.forEach(line => {
+                    const parts = line.split(',');
+                    // CSVの形式が 'jp,kr' (2要素) であることを確認
+                    if (parts.length >= 2) {
+                        // trim()で前後の空白を除去
+                        const japanese = parts[0].trim();
+                        // 2番目以降のカンマも韓国語の一部として結合（例: "jp, kr, part2" の場合）
+                        const korean = parts.slice(1).join(',').trim(); 
+                        
+                        if (japanese && korean) { // 両方が空でないことを確認
+                            flashcards.push({ japanese: japanese, korean: korean });
+                        }
+                    }
+                });
+
+                if (flashcards.length > 0) {
+                    currentIndex = 0;
+                    updateCard();
+                    cardUi.classList.remove('hidden'); // カードUIを表示
+                    statusMessage.classList.add('hidden'); // 読み込みメッセージを隠す
+                } else {
+                    // alert(...) を displayError に変更
+                    displayError("CSVファイルの形式が正しくないか、データが空です (jp,kr 形式でお願いします)。");
+                    // cardUi.classList.add('hidden'); (displayError内で実行されます)
+                }
+            }
+
+
+            // カードを更新する関数
+            function updateCard() {
+                if (flashcards.length === 0) {
+                    cardUi.classList.add('hidden');
+                    return;
+                }
+
+                const card = flashcards[currentIndex];
+                cardFrontText.textContent = card.korean;
+                cardBackText.textContent = card.japanese;
+                
+                // カードカウンターを更新
+                cardCounter.textContent = `${currentIndex + 1} / ${flashcards.length}`;
+
+                // カードが裏返っている場合は表面に戻す（次のカードに進んだ時用）
+                if (isFlipped) {
+                    cardContainer.classList.remove('is-flipped');
+                    isFlipped = false;
+                }
+
+                // ボタンの有効/無効を切り替え
+                prevButton.disabled = currentIndex === 0;
+                nextButton.disabled = currentIndex === flashcards.length - 1;
+            }
+
+            // カードをフリップする関数
+            function flipCard() {
+                isFlipped = !isFlipped;
+                cardContainer.classList.toggle('is-flipped');
+            }
+
+            // 「次へ」ボタンの処理
+            nextButton.addEventListener('click', () => {
+                if (currentIndex < flashcards.length - 1) {
+                    currentIndex++;
+                    updateCard();
+                }
+            });
+
+            // 「前へ」ボタンの処理
+            prevButton.addEventListener('click', () => {
+                if (currentIndex > 0) {
+                    currentIndex--;
+                    updateCard();
+                }
+            });
+
+            // カードクリックでフリップ
+            cardContainer.addEventListener('click', flipCard);
+
+            // ページ読み込み時にCSVデータを自動で読み込む (変更)
+            loadCSVData();
+        });
+    </script>
+
+</body>
+</html>
