@@ -123,10 +123,8 @@
             </div>
 
             <!-- 
-                (修正) わかった/わからなかった ボタン
-                'hidden' クラス (display: none) を削除し、
-                'opacity-0' (透明) と 'invisible' (非表示だがスペースは確保) をデフォルトにします。
-                'transition-opacity' でフェードイン/アウトするようにします。
+                (前回の修正) わかった/わからなかった ボタン
+                'hidden' ではなく 'opacity-0 invisible' を使い、レイアウトがずれないようにスペースを確保
             -->
             <div id="answer-buttons" class="flex justify-between items-center mb-4 opacity-0 invisible transition-opacity duration-300">
                 <button id="incorrect-button" class="bg-red-600 hover:bg-red-500 text-white font-bold py-3 px-6 rounded-lg transition-colors shadow-md w-1/2 mr-2">
@@ -137,7 +135,7 @@
                 </button>
             </div>
             
-            <!-- カードの残り枚数カウンター (ここがずれる問題があった) -->
+            <!-- カードの残り枚数カウンター -->
             <div id="session-counter" class="text-center text-lg text-gray-400 mb-4"></div>
         </div>
         
@@ -152,7 +150,7 @@
             
             <div class="mt-6 text-left">
                 <h3 class="text-xl font-semibold mb-3 text-gray-300">苦手な単語</h3>
-                <ul id="苦手な単語リスト" class="max-h-48 overflow-y-auto bg-gray-900 p-3 rounded-lg">
+                <ul id="苦手な単語リスト" class="max-h-48 overflow-y-auto bg-gray-900 p-3 rounded-lg hidden">
                     <!-- 苦手な単語がここに挿入されます -->
                 </ul>
                 <p id="no-incorrect-words" class="text-gray-500 text-center hidden">パーフェクトです！</p>
@@ -217,7 +215,8 @@
             // --- CSV読み込み ---
             async function loadCSVData() {
                 try {
-                    const response = await fetch('words.csv');
+                    // (キャッシュを回避するためにリクエストにタイムスタンプを追加)
+                    const response = await fetch(`words.csv?t=${new Date().getTime()}`);
                     if (!response.ok) {
                         throw new Error(`HTTP error! status: ${response.status}`);
                     }
@@ -349,11 +348,12 @@
                 }
             }
 
+            // (★今回の修正)
             function handleCorrect() {
                 if (isTransitioning) return;
                 isTransitioning = true;
                 
-                // (修正) ボタンを（アニメーション付きで）隠す
+                // (★追加) ボタンを（アニメーション付きで）即座に隠す
                 answerButtons.classList.add('opacity-0', 'invisible');
                 answerButtons.classList.remove('opacity-100', 'visible');
                 
@@ -366,17 +366,18 @@
                 }
             }
 
+            // (★今回の修正)
             function handleIncorrect() {
                 if (isTransitioning) return;
                 isTransitioning = true;
 
+                // (★追加) ボタンを（アニメーション付きで）即座に隠す
+                answerButtons.classList.add('opacity-0', 'invisible');
+                answerButtons.classList.remove('opacity-100', 'visible');
+                
                 incorrectCount++;
                 incorrectCards.add(currentCard);
                 sessionQueue.push(currentCard);
-                
-                // (修正) ボタンを（アニメーション付きで）隠す
-                answerButtons.classList.add('opacity-0', 'invisible');
-                answerButtons.classList.remove('opacity-100', 'visible');
                 
                 if (isFlipped) {
                     cardContainer.classList.remove('is-flipped');
@@ -400,7 +401,7 @@
                 
                 incorrectWordsList.innerHTML = '';
                 if (incorrectCards.size > 0) {
-                    incorrectWordsList.classList.remove('hidden'); // (追加) リストを表示
+                    incorrectWordsList.classList.remove('hidden'); // リストを表示
                     noIncorrectWords.classList.add('hidden');
                     incorrectCards.forEach(card => {
                         const li = document.createElement('li');
@@ -408,8 +409,8 @@
                         incorrectWordsList.appendChild(li);
                     });
                 } else {
-                    incorrectWordsList.classList.add('hidden'); // (追加) リストを非表示
-                    noIncorrectWords.classList.remove('hidden');
+                    incorrectWordsList.classList.add('hidden'); // リストを非表示
+                    noIncorrectWords.classList.remove('hidden'); // 「パーフェクト」を表示
                 }
             }
 
