@@ -195,7 +195,7 @@
 
             // --- 変数の初期化 ---
             let masterFlashcards = []; 
-            let sessionQueue = [];     
+            let sessionQueue = [];      
             let currentCard = null;    
             let incorrectCards = new Set(); 
             let correctCount = 0;       
@@ -284,7 +284,8 @@
             // --- セッション管理 ---
 
             function startSession() {
-                correctCount = masterFlashcards.length;
+                // (★修正) correctCount は正解した回数（0からスタート）
+                correctCount = 0; 
                 incorrectCount = 0;
                 incorrectCards.clear();
                 
@@ -294,18 +295,16 @@
                 cardUi.classList.remove('hidden');
                 statusMessage.classList.add('hidden');
                 
-                // (★変更) updateCard() の代わりに、最初のカードを直接セットする
                 if (sessionQueue.length > 0) {
                     currentCard = sessionQueue.shift();
-                    displayCard(currentCard); // 新しい関数
+                    displayCard(currentCard); // 最初のカードをセット
                     sessionCounter.textContent = `残り: ${sessionQueue.length + 1}`;
                 } else {
-                    // もしCSVが空ならエラー表示（parseCSV側で処理されるが念のため）
                     displayError("単語データが見つかりません。");
                 }
             }
 
-            // (★追加) カードを指定された内容で即時表示する関数 (アニメーションなし)
+            // カードを指定された内容で即時表示する関数 (アニメーションなし)
             function displayCard(card) {
                 isTransitioning = false;
 
@@ -331,8 +330,6 @@
                 }
             }
 
-            // (★変更) 以前の updateCard は不要になったので削除
-
             function flipCard() {
                 if (isTransitioning) return;
                 
@@ -350,7 +347,7 @@
                 }
             }
 
-            // (★追加) 次のカードをロードし、アニメーションさせる関数
+            // (★変更) 次のカードをロードし、アニメーションさせる関数
             function loadNextCard(wasIncorrect) {
                 if (isTransitioning) return;
                 isTransitioning = true;
@@ -363,6 +360,9 @@
                     incorrectCount++;
                     incorrectCards.add(currentCard);
                     sessionQueue.push(currentCard); // 間違えたカードをキューの最後に戻す
+                } else {
+                    // (★追加) 正解した場合のみカウントを増やす
+                    correctCount++;
                 }
                 
                 // 次のカードがあるか確認
@@ -381,7 +381,8 @@
                 // 次のカードを準備
                 const nextCard = sessionQueue.shift();
 
-                // 即座に表面（韓国語）だけを次のカードの内容に更新
+                // (★変更) 'わかった' 'わからなかった' に関係なく、
+                // アニメーション開始前に次のカードの表面を更新する
                 cardFrontText.textContent = nextCard.korean;
                 if (showReading && hasReadingData && nextCard.reading) {
                     cardFrontReading.textContent = nextCard.reading;
@@ -392,6 +393,8 @@
                 }
                 
                 // カードを表面に戻すアニメーション
+                // (ボタンが押せるのは裏面表示時 = isFlipped が true の時なので、
+                // このアニメーションは必ず実行される)
                 if (isFlipped) {
                     cardContainer.classList.remove('is-flipped');
                     isFlipped = false;
@@ -400,17 +403,22 @@
                 // アニメーション完了後に裏面（日本語）の更新と currentCard の確定
                 setTimeout(() => {
                     currentCard = nextCard; // ここで currentCard を正式に更新
-                    cardBackText.textContent = currentCard.japanese; // 裏面を更新
+
+                    // (★変更) 表面の更新はアニメーション前に完了しているので、
+                    // ここでは裏面の更新のみを行う
+                    
+                    cardBackText.textContent = currentCard.japanese; // 裏面は常に更新
                     sessionCounter.textContent = `残り: ${sessionQueue.length + 1}`;
                     isTransitioning = false;
                 }, 600); // 600msはフリップアニメーションの時間
             }
 
-            // (★変更) handleCorrect / handleIncorrect が新しい関数を呼ぶように
+            // 'わかった' ボタンの処理
             function handleCorrect() {
                 loadNextCard(false);
             }
 
+            // 'わからなかった' ボタンの処理
             function handleIncorrect() {
                 loadNextCard(true);
             }
@@ -419,7 +427,9 @@
                 cardUi.classList.add('hidden');
                 resultsScreen.classList.remove('hidden');
                 
+                // (★修正) 総回答数 = 正解 + 不正解
                 const totalAnswers = correctCount + incorrectCount;
+                // (★修正) totalAnswers が 0 の場合のNaNを防ぐ
                 const accuracy = (totalAnswers === 0) ? 0 : Math.round((correctCount / totalAnswers) * 100);
                 
                 accuracyRate.textContent = `${accuracy}%`;
