@@ -134,6 +134,13 @@
                     わかった
                 </button>
             </div>
+
+            <!-- ★追加: あきらめるボタン -->
+            <div id="give-up-container" class="flex justify-center mb-4 hidden">
+                <button id="give-up-button" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-3 px-6 rounded-lg transition-colors shadow-md w-1/2">
+                    あきらめる
+                </button>
+            </div>
             
             <!-- カードの残り枚数カウンター -->
             <div id="session-counter" class="text-center text-lg text-gray-400 mb-4"></div>
@@ -192,8 +199,15 @@
             const incorrectWordsList = document.getElementById('苦手な単語リスト');
             const noIncorrectWords = document.getElementById('no-incorrect-words');
             const restartButton = document.getElementById('restart-button');
+            
+            <!-- ★追加: あきらめるボタンのDOM取得 -->
+            const giveUpContainer = document.getElementById('give-up-container');
+            const giveUpButton = document.getElementById('give-up-button');
 
             // --- 変数の初期化 ---
+            const GIVE_UP_THRESHOLD = 5;
+            const GIVE_UP_PHRASE = "ざーこざーこばかまぬけえ？";
+
             let masterFlashcards = []; 
             let sessionQueue = [];      
             let currentCard = null;    
@@ -261,7 +275,8 @@
                         const reading = (parts.length >= 3) ? parts[2].trim() : '';
                         
                         if (japanese && korean) {
-                            masterFlashcards.push({ japanese: japanese, korean: korean, reading: reading });
+                            // ★変更: incorrectCount を追加
+                            masterFlashcards.push({ japanese: japanese, korean: korean, reading: reading, incorrectCount: 0 });
                             if (reading) {
                                 hasReadingData = true;
                             }
@@ -288,6 +303,9 @@
                 correctCount = 0; 
                 incorrectCount = 0;
                 incorrectCards.clear();
+                
+                // ★追加: セッション開始時に全カードの間違いカウントをリセット
+                masterFlashcards.forEach(card => card.incorrectCount = 0); 
                 
                 sessionQueue = shuffleArray([...masterFlashcards]);
                 
@@ -340,24 +358,38 @@
                     // (修正) 'hidden' の代わりに opacity と visibility を操作
                     answerButtons.classList.remove('opacity-0', 'invisible');
                     answerButtons.classList.add('opacity-100', 'visible');
+
+                    // ★追加: 閾値（5回）の1回前（4回）間違えた状態で裏返したらボタン表示
+                    if (currentCard.incorrectCount >= (GIVE_UP_THRESHOLD - 1)) { 
+                        giveUpContainer.classList.remove('hidden');
+                        speakText(GIVE_UP_PHRASE, 'ja-JP'); // 読み上げ
+                    }
+
                 } else {
                     // (修正) 'hidden' の代わりに opacity と visibility を操作
                     answerButtons.classList.add('opacity-0', 'invisible');
                     answerButtons.classList.remove('opacity-100', 'visible');
+                    giveUpContainer.classList.add('hidden'); // ★追加: 表面に戻ったらあきらめるボタンも隠す
                 }
             }
 
             // (★変更) 次のカードをロードし、アニメーションさせる関数
-            function loadNextCard(wasIncorrect) {
+            function loadNextCard(wasIncorrect, gaveUp = false) { // ★変更: gaveUp パラメータ追加
                 if (isTransitioning) return;
                 isTransitioning = true;
                 
                 // ボタンを（アニメーション付きで）即座に隠す
                 answerButtons.classList.add('opacity-0', 'invisible');
                 answerButtons.classList.remove('opacity-100', 'visible');
+                giveUpContainer.classList.add('hidden'); // ★追加: あきらめるボタンも隠す
 
-                if (wasIncorrect) {
+                if (gaveUp) {
+                    // ★追加: あきらめた場合 (キューに戻さず、カウントもしないが苦手リストには追加)
+                    incorrectCards.add(currentCard);
+                    // incorrectCount や correctCount は増減させない
+                } else if (wasIncorrect) {
                     incorrectCount++;
+                    currentCard.incorrectCount++; // ★追加: カード個別の間違いカウントを増やす
                     incorrectCards.add(currentCard);
                     sessionQueue.push(currentCard); // 間違えたカードをキューの最後に戻す
                 } else {
@@ -454,6 +486,12 @@
             // --- イベントリスナー ---
             correctButton.addEventListener('click', handleCorrect);
             incorrectButton.addEventListener('click', handleIncorrect);
+            
+            // ★追加: あきらめるボタンのリスナー
+            giveUpButton.addEventListener('click', () => {
+                loadNextCard(false, true); // あきらめたフラグを立てて次へ
+            });
+
             restartButton.addEventListener('click', startSession);
             cardContainer.addEventListener('click', flipCard);
             
