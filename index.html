@@ -353,10 +353,14 @@
                 if (isTransitioning) return;
                 isTransitioning = true;
                 
+                // (修正) ボタンを（アニメーション付きで）隠す
+                answerButtons.classList.add('opacity-0', 'invisible');
+                answerButtons.classList.remove('opacity-100', 'visible');
+                
                 if (isFlipped) {
                     cardContainer.classList.remove('is-flipped');
                     isFlipped = false;
-                    setTimeout(updateCard, 600); 
+                    setTimeout(updateCard, 600); // 600msはフリップアニメーションの時間
                 } else {
                     updateCard();
                 }
@@ -370,16 +374,20 @@
                 incorrectCards.add(currentCard);
                 sessionQueue.push(currentCard);
                 
+                // (修正) ボタンを（アニメーション付きで）隠す
+                answerButtons.classList.add('opacity-0', 'invisible');
+                answerButtons.classList.remove('opacity-100', 'visible');
+                
                 if (isFlipped) {
                     cardContainer.classList.remove('is-flipped');
                     isFlipped = false;
-                    setTimeout(updateCard, 600); 
+                    setTimeout(updateCard, 600); // 600msはフリップアニメーションの時間
                 } else {
                     updateCard();
                 }
             }
 
-S            function showResults() {
+            function showResults() {
                 cardUi.classList.add('hidden');
                 resultsScreen.classList.remove('hidden');
                 
@@ -392,13 +400,15 @@ S            function showResults() {
                 
                 incorrectWordsList.innerHTML = '';
                 if (incorrectCards.size > 0) {
+                    incorrectWordsList.classList.remove('hidden'); // (追加) リストを表示
+                    noIncorrectWords.classList.add('hidden');
                     incorrectCards.forEach(card => {
                         const li = document.createElement('li');
                         li.innerHTML = `<span>${card.korean}</span> <span class="text-gray-400">${card.japanese}</span>`;
                         incorrectWordsList.appendChild(li);
                     });
-                    noIncorrectWords.classList.add('hidden');
                 } else {
+                    incorrectWordsList.classList.add('hidden'); // (追加) リストを非表示
                     noIncorrectWords.classList.remove('hidden');
                 }
             }
@@ -440,7 +450,7 @@ S            function showResults() {
             function speakText(text, lang) {
                 if (!synth || !text) return;
                 synth.cancel(); 
-                const utterance = new SpeechS synthesisUtterance(text);
+                const utterance = new SpeechSynthesisUtterance(text);
                 utterance.lang = lang;
                 const voices = synth.getVoices();
                 let specificVoice = voices.find(voice => voice.lang === lang);
